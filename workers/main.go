@@ -22,8 +22,8 @@ type Result struct {
 }
 
 func main() {
-	numWorkers := 5
-	numTasks := 30
+	numWorkers := 8 //how many workers we can go?
+	numTasks := 1000
 
 	tasks := make(chan Task)
 	//generate tasks
@@ -69,16 +69,16 @@ func main() {
 	}
 	//worker summary report
 	for _, w := range workers {
-		fmt.Printf("Woker #%d:completed %d tasks in total\n", w.ID, w.cntTask)
+		fmt.Printf("Woker #%d:completed %d tasks\n", w.ID, w.cntTask)
 	}
 
 }
 
+//executeTask returns the results after processing the task
 func (w *Worker) executeTask(tsk Task) (Result, error) {
-
 	res := Result{task: tsk, start: time.Now(), assignedTo: w}
 	//sleep for random period to simulate task processing
-	d := time.Duration(rand.Float64()*2) * time.Second
+	d := time.Duration(rand.Int31n(10)) * time.Millisecond
 	time.Sleep(d)
 	res.elapsed = time.Since(res.start)
 	w.cntTask++
