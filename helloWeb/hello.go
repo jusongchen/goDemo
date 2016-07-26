@@ -6,12 +6,18 @@ import (
 	"net/http"
 )
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
+func greetingHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hi %s, how are you doing today?", r.URL.Path[1:])
+}
+
+func defaultHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusBadRequest)
+	fmt.Fprintf(w, "bad request:%s!", r.URL.Path[:])
 }
 
 func main() {
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/hello/", greetingHandler)
+	http.HandleFunc("/", defaultHandler)
 	err := http.ListenAndServe(":8080", nil)
 	log.Fatal(err)
 }
