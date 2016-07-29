@@ -30,7 +30,7 @@ const (
 
 func main() {
 
-	domains := []string{"salesforce.com", "360.cn", "360.com", "adobe.com", "alibaba.com", "aliexpress.com", "amazon.co.jp", "amazon.co.uk", "amazon.com", "amazon.de",
+	domains := []string{"360.com", "adobe.com", "alibaba.com", "aliexpress.com", "amazon.co.jp", "amazon.co.uk", "amazon.com", "amazon.de",
 		"amazon.in", "apple.com", "ask.com", "baidu.com", "bing.com", "blogger.com", "blogspot.com", "bongacams.com", "chase.com", "chinadaily.com.cn", "cnn.com",
 		"coccoc.com", "craigslist.org", "diply.com", "dropbox.com", "ebay.com", "facebook.com", "fc2.com", "flipkart.com", "github.com", "gmw.cn", "go.com", "google.ca",
 		"google.co.id", "google.co.in", "google.co.jp", "google.co.uk", "google.com", "google.com.au", "google.com.br", "google.com.hk", "google.com.mx", "google.com.tr",
@@ -41,14 +41,14 @@ func main() {
 		"weibo.com", "whatsapp.com", "wikipedia.org", "wordpress.com", "xhamster.com", "BAD NAME.com", "xvideos.com", "yahoo.co.jp", "yahoo.com", "yandex.ru", "youtube.com"}
 
 	// timeout := time.Duration(3000) * time.Millisecond
-	timeout := 300 * time.Millisecond
-	numURL := len(domains)
+	timeout := 130 * time.Millisecond
+	numTasks := len(domains)
 
-	results := make(chan Result, numURL) //buffered
+	results := make(chan Result, numTasks) //buffered
+	done := make(chan struct{})
 
-	wgTopN, wgAll := sync.WaitGroup{}, sync.WaitGroup{}
-	wgTopN.Add(topN)
-	wgAll.Add(numURL)
+	wgAll := sync.WaitGroup{}
+	wgAll.Add(numTasks)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -64,45 +64,38 @@ func main() {
 				url:        url,
 				err:        err,
 			}
-			results <- res
-			if err == nil {
-				wgTopN.Done()
+			//do not send result if it is done already
+			select {
+			case <-done: //done close, either timeout or we have got enough winners
+			case results <- res:
 			}
 			wgAll.Done()
 		}(domain)
 	}
-	//when hits timeout or get enough results,cancel all requests
-	go func() {
-		done := make(chan struct{})
-		go func() {
-			wgTopN.Wait()
-			done <- struct{}{}
-		}()
 
+	go func() {
 		select { //wait until one of the following events
 		case <-time.After(timeout):
-		case <-done:
+			close(done)
+		case <-done: //channel done is close when there are topN good results retured
 		}
-		cancel()
+		cancel() //when hits timeout or get enough results,cancel all requests
 	}()
 
-	//when all httpGet returns, close both channels
 	go func() {
 		wgAll.Wait()
-		close(results)
+		close(results) //when all httpGet returns, close result channel
 	}()
-	printResult(results, topN, numURL)
-}
 
-//printResult prints winners, then losers
-func printResult(results <-chan Result, topN, numURL int) {
 	losers := []Result{}
-
-	i := 0
+	numWinner := 0
 	for res := range results {
-		if res.err == nil && i < topN {
+		if res.err == nil && numWinner < topN {
 			fmt.Printf("%v\t%-50s\t%v\n", res.elapsed, res.url, *res.taskResult)
-			i++
+			numWinner++
+			if numWinner == topN { //we have got enough winners
+				close(done) //close done channel to trigger cancelling of all other tasks
+			}
 		} else {
 			losers = append(losers, res)
 		}
@@ -114,12 +107,11 @@ func printResult(results <-chan Result, topN, numURL int) {
 	}
 }
 
-// Search sends query to Google search and returns the results.
+//execTask call http.Get to get web content
 func execTask(parentCtx context.Context, timeout time.Duration, url string) (taskResult, error) {
-	// Prepare the Google Search API request.
+	c := make(chan taskResult, 1) //buffered channel to ensure the contents of http response can be send to this channel even execTask() be cancelled
 	ctx, cancel := context.WithTimeout(parentCtx, timeout)
 	defer cancel()
-	c := make(chan taskResult)
 	go func() {
 		resp, err := http.Get(url)
 		if err != nil {
@@ -134,6 +126,7 @@ func execTask(parentCtx context.Context, timeout time.Duration, url string) (tas
 			server:     resp.Header.Get("Server"),
 			serverTime: resp.Header.Get("Date"),
 		}
+		close(c) //this will be executed even execTask returns first
 	}()
 	select {
 	case <-ctx.Done():
