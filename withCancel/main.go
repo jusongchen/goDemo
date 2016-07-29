@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -43,19 +44,21 @@ func main() {
 	results := make(chan Result, topN)
 	errResults := make(chan Result, numURL)
 
-	wg := sync.WaitGroup{}
-	wg.Add(numURL)
+	wgTopN := sync.WaitGroup{}
+	wgTopN.Add(topN)
+
+	wgAll := sync.WaitGroup{}
+	wgAll.Add(numURL)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	for _, domain := range domains {
 		go func(domain string) {
-
 			start := time.Now()
 			url := "http://" + domain
 
 			httpRes, err := httpGet(ctx, timeout, url)
-
 			res := Result{elapsed: time.Since(start),
 				httpResult: httpRes,
 				url:        url,
@@ -66,32 +69,48 @@ func main() {
 				errResults <- res
 			} else {
 				results <- res
+				wgTopN.Done()
 			}
-			wg.Done()
+			wgAll.Done()
 		}(domain)
 	}
-	//when hits timeout ,cancel all requests
+	//when hits timeout or get enough results,cancel all requests
 	go func() {
-		<-time.After(timeout)
+
+		done := make(chan struct{})
+
+		go func() {
+			wgTopN.Wait()
+			done <- struct{}{}
+		}()
+
+		select { //wait until one of the following events
+		case <-time.After(timeout):
+		case <-done:
+		}
 		cancel()
 	}()
+
 	//when all httpGet returns, close both channels
 	go func() {
-		wg.Wait()
+		wgAll.Wait()
 		close(results)
 		close(errResults)
 	}()
 
+	i := 0
+	fmt.Printf("Winners:\n")
 	for res := range results {
+		if i == topN {
+			fmt.Printf("\nLosers:\n")
+		}
 		fmt.Printf("%v\t\t%s\t\t%v\n", res.elapsed, res.url, res.httpResult)
+		i++
 	}
 
-	fmt.Printf(`
-Error Reports:
-========================
-`)
+	fmt.Printf("\nDisqualified:\n")
 	for res := range errResults {
-		fmt.Printf("%v\t\t%s\t\t%v\n", res.elapsed, res.url, res.err)
+		fmt.Fprintf(os.Stderr, "%v\t%s\t%v\n", res.elapsed, res.url, res.err)
 	}
 }
 
