@@ -119,7 +119,7 @@ func execTask(parentCtx context.Context, timeout time.Duration, url string) (tas
 	// Prepare the Google Search API request.
 	ctx, cancel := context.WithTimeout(parentCtx, timeout)
 	defer cancel()
-	c := make(chan taskResult)
+	c := make(chan taskResult, 1)
 	go func() {
 		resp, err := http.Get(url)
 		if err != nil {
@@ -134,6 +134,7 @@ func execTask(parentCtx context.Context, timeout time.Duration, url string) (tas
 			server:     resp.Header.Get("Server"),
 			serverTime: resp.Header.Get("Date"),
 		}
+		close(c) //this will be executed even execTask returns first
 	}()
 	select {
 	case <-ctx.Done():
