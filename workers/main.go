@@ -1,10 +1,10 @@
 package main
 
 import (
-	"crypto/md5"
+	"compress/gzip"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,7 +22,7 @@ var DOP int
 //Task interface
 type Task interface {
 	exec() error
-	String() string
+	Desciption() string
 }
 
 //Worker keep a tract of number of tasks executed
@@ -41,25 +41,35 @@ type TaskExec struct {
 }
 
 //MD5Sum MD5 hash of a file
-type MD5Sum struct {
-	filename string
-	MD5      [md5.Size]byte
+type gzipCtrl struct {
+	source string
+	target string
 }
 
 //Task implements exec method
-func (task *MD5Sum) exec() error {
-
-	data, err := ioutil.ReadFile(task.filename)
+func (ctrl *gzipCtrl) exec() error {
+	reader, err := os.Open(ctrl.source)
 	if err != nil {
-		return errors.Wrap(err, "MD5Sum ReadFile")
+		return err
 	}
-	task.MD5 = md5.Sum(data)
-	return nil
+
+	filename := filepath.Base(ctrl.source)
+	writer, err := os.Create(ctrl.target)
+	if err != nil {
+		return errors.Wrap(err, "gzip exec")
+	}
+	defer writer.Close()
+
+	archiver := gzip.NewWriter(writer)
+	archiver.Name = filename
+	defer archiver.Close()
+
+	_, err = io.Copy(archiver, reader)
+	return err
 }
 
-func (task *MD5Sum) String() string {
-
-	return task.filename + " MD5:" + fmt.Sprintf("%x", task.MD5)
+func (ctrl *gzipCtrl) Describe() string {
+	return "gzip " + ctrl.source
 }
 
 func main() {
@@ -85,6 +95,8 @@ func main() {
 	}
 	pattern := flag.Arg(1)
 
+	// not ending with .gz
+	// pattern += `[^[.]][^g][^z]$`
 	files, err := FindFiles(path, pattern)
 	if err != nil {
 		log.Fatal(err)
@@ -98,11 +110,11 @@ func main() {
 func MD5files(DOP int, files []string) error {
 	numWorkers := DOP
 
-	tasks := make(chan MD5Sum)
+	tasks := make(chan gzipCtrl)
 	//generate tasks
 	go func() {
 		for i := range files {
-			tasks <- MD5Sum{filename: files[i]}
+			tasks <- gzipCtrl{source: files[i], target: files[i] + ".gz"}
 		}
 		close(tasks)
 	}()
@@ -163,9 +175,6 @@ func FindFiles(root string, pattern string) ([]string, error) {
 			return nil
 		}
 
-		// if err == os.ErrPermission {
-		// 	return nil
-		// }
 		if err != nil {
 			return errors.Wrap(err, "filepath Walk")
 		}
