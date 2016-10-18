@@ -59,16 +59,8 @@ func Do(DOP int, f Factory) error {
 		}
 	}()
 
-	taskExecs := make(chan TaskExec)
-
 	var wg sync.WaitGroup
 	wg.Add(numWorkers)
-
-	go func() {
-		wg.Wait()
-		//when all workers have done their work, close TaskExec channel
-		close(taskExecs)
-	}()
 
 	workers := []*Worker{}
 	//launch workers
@@ -89,10 +81,12 @@ func Do(DOP int, f Factory) error {
 				//make call to PostExec
 				tsk.PostExec(taskExec)
 
-				taskExecs <- taskExec
 			}
 		}(w)
 	}
+
+	//wait for all workers done
+	wg.Wait()
 
 	return nil
 }
