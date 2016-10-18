@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"time"
 
 	"github.com/jusongchen/goDemo/workers"
 	"github.com/pkg/errors"
@@ -93,16 +94,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	taskExections, err := workers.Do(DOP, fileList(l))
+	start := time.Now()
+	log.Printf("\nStart gzip at %v\n", start)
+	err = workers.Do(DOP, fileList(l))
+	log.Printf("Total Elapsed Time:%v\n", time.Since(start))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Woker \t\t\t duration \t\t task\n")
-	for _, r := range taskExections {
-		fmt.Printf("Woker #%d \t\t %v \t\t%s\n", r.WorkerID, r.Elapsed, r.Task)
-	}
 }
 
 //FindFiles search directory tree to get files matching regexp pattern
