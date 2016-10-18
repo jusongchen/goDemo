@@ -53,16 +53,10 @@ func Do(DOP int, f Factory) error {
 		}
 	}()
 
-	taskExecs := make(chan TaskExec)
+	// taskExecs := make(chan TaskExec)
 
 	var wg sync.WaitGroup
 	wg.Add(numWorkers)
-
-	go func() {
-		wg.Wait()
-		//when all workers have done their work, close TaskExec channel
-		close(taskExecs)
-	}()
 
 	workers := []*Worker{}
 	//launch workers
@@ -89,15 +83,19 @@ func Do(DOP int, f Factory) error {
 					log.Printf("Worker %v fail when processing %v: %v", w, tsk, err)
 					continue
 				}
-				taskExecs <- taskExec
+				// taskExecs <- taskExec
 			}
 		}(w)
 	}
 
-	exec := []TaskExec{}
-	for e := range taskExecs {
-		exec = append(exec, e)
-	}
-	_ = exec
+	wg.Wait()
+	//when all workers have done their work, close TaskExec channel
+	// close(taskExecs)
+
+	// exec := []TaskExec{}
+	// for e := range taskExecs {
+	// 	exec = append(exec, e)
+	// }
+	// _ = exec
 	return nil
 }
