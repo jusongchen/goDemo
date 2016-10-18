@@ -1,31 +1,25 @@
 package workers
 
 import (
-	"log"
+	"fmt"
 	"sync"
 	"time"
+	// "golang.org/x/net/context"
 )
 
 //DOP degree of parallelism
 var DOP int
 
-//Task interface
-type Task interface {
-	Exec() error
-	String() string
-}
-
 //Worker keep a tract of number of tasks executed
 type Worker struct {
-	WorkerID        int
-	cntTask         int
-	workingDuration time.Duration
+	WorkerID int
 }
 
 //TaskExec task execution stat
 type TaskExec struct {
 	Task
 	*Worker
+	err     error
 	start   time.Time
 	Elapsed time.Duration
 }
@@ -35,14 +29,27 @@ type Factory interface {
 	Make() Task
 }
 
+//Task interface
+type Task interface {
+	Exec() error
+	PreExec(tsk TaskExec)
+	PostExec(tsk TaskExec)
+}
+
+// Context controls interaction between the master and workers
+// type Context struct {
+// 	context.Context
+// }
+
 //Do execute tasks in parallel
-func Do(DOP int, f Factory) ([]TaskExec, error) {
+func Do(DOP int, f Factory) error {
 	numWorkers := DOP
 
 	tasks := make(chan Task)
 	//generate tasks
 	go func() {
 		for {
+			fmt.Printf("\nmaking tasks ***********\n")
 			task := f.Make()
 			if task == nil { //no more tasks
 				close(tasks)
@@ -73,25 +80,19 @@ func Do(DOP int, f Factory) ([]TaskExec, error) {
 			for tsk := range tasks {
 
 				taskExec := TaskExec{Task: tsk, Worker: w, start: time.Now()}
-				err := tsk.Exec()
+				//make call to PreExec
+				tsk.PreExec(taskExec)
+
+				taskExec.err = tsk.Exec()
 				taskExec.Elapsed = time.Since(taskExec.start)
 
-				//Instrument worker executions
-				taskExec.cntTask++
-				taskExec.workingDuration += taskExec.Elapsed
+				//make call to PostExec
+				tsk.PostExec(taskExec)
 
-				if err != nil {
-					log.Printf("Worker %v fail when processing %v: %v", w, tsk, err)
-					continue
-				}
 				taskExecs <- taskExec
 			}
 		}(w)
 	}
 
-	exec := []TaskExec{}
-	for e := range taskExecs {
-		exec = append(exec, e)
-	}
-	return exec, nil
+	return nil
 }

@@ -23,22 +23,18 @@ type gzipCtx struct {
 	target string
 }
 
-func (ctrl *gzipCtx) String() string {
-	return "gzip  " + ctrl.source
-}
-
 //Task implements exec method
-func (ctrl *gzipCtx) Exec() error {
-	// log.Printf("processing:%s", ctrl.source)
-	// return nil
+func (gz *gzipCtx) Exec() error {
+	log.Printf("processing:%s", gz.source)
+	return nil
 
-	reader, err := os.Open(ctrl.source)
+	reader, err := os.Open(gz.source)
 	if err != nil {
 		return err
 	}
 
-	filename := filepath.Base(ctrl.source)
-	writer, err := os.Create(ctrl.target)
+	filename := filepath.Base(gz.source)
+	writer, err := os.Create(gz.target)
 	if err != nil {
 		return errors.Wrap(err, "gzip exec")
 	}
@@ -53,21 +49,32 @@ func (ctrl *gzipCtx) Exec() error {
 	return err
 }
 
+//Task implements exec method
+func (gz *gzipCtx) PreExec(exec workers.TaskExec) {
+	log.Printf("processing:%s\n", gz.source)
+}
+
+func (gz *gzipCtx) PostExec(exec workers.TaskExec) {
+	fmt.Printf("Woker #%d \t\t %v \t\t%s\n", exec.WorkerID, exec.Elapsed, gz.source)
+}
+
 type fileList []string
 
-var i int
+var fileIndex int
 
 func (l fileList) Make() workers.Task {
-	if i == len(l) {
+	log.Printf("Make:fileIndex %d, %v\n", fileIndex, l)
+	if fileIndex == len(l) {
 		return nil
 	}
-	name := l[i]
-	i++
+	name := l[fileIndex]
+	log.Printf("Make:file:%s\n", name)
+	fileIndex++
 	return &gzipCtx{source: name, target: name + ".gz"}
 }
 
 func main() {
-	flag.IntVar(&DOP, "DOP", runtime.NumCPU(), "Degree of Parallelism")
+	flag.IntVar(&DOP, "DOP", runtime.NumCPU(), "Degree of Parallelism, must be >= 1")
 
 	flag.Usage = func() {
 		fmt.Printf("%s by Jusong Chen\n", os.Args[0])
@@ -80,7 +87,7 @@ func main() {
 
 	flag.Parse()
 
-	if flag.NArg() != 2 {
+	if flag.NArg() != 2 || DOP < 1 {
 		flag.Usage()
 	}
 	path, err := filepath.Abs(flag.Arg(0))
@@ -93,16 +100,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// log.Printf("files Found:%v\n", l)
+	// c := workers.Context{}
 
-	taskExections, err := workers.Do(DOP, fileList(l))
+	err = workers.Do(DOP, fileList(l))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Woker \t\t\t duration \t\t task\n")
-	for _, r := range taskExections {
-		fmt.Printf("Woker #%d \t\t %v \t\t%s\n", r.WorkerID, r.Elapsed, r.Task)
-	}
 }
 
 //FindFiles search directory tree to get files matching regexp pattern
