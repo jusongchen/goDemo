@@ -1,6 +1,7 @@
 package workers
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -36,7 +37,7 @@ type Factory interface {
 }
 
 //Do execute tasks in parallel
-func Do(DOP int, f Factory) ([]TaskExec, error) {
+func Do(DOP int, f Factory) error {
 	numWorkers := DOP
 
 	tasks := make(chan Task)
@@ -65,6 +66,8 @@ func Do(DOP int, f Factory) ([]TaskExec, error) {
 
 	workers := []*Worker{}
 	//launch workers
+	fmt.Printf("Woker \t\t\t duration \t\t task\n")
+
 	for i := 0; i < numWorkers; i++ {
 		w := &Worker{WorkerID: i}
 		workers = append(workers, w)
@@ -80,6 +83,8 @@ func Do(DOP int, f Factory) ([]TaskExec, error) {
 				taskExec.cntTask++
 				taskExec.workingDuration += taskExec.Elapsed
 
+				fmt.Printf("Woker #%d \t\t %v \t\t%s\n", taskExec.WorkerID, taskExec.Elapsed, taskExec.Task)
+
 				if err != nil {
 					log.Printf("Worker %v fail when processing %v: %v", w, tsk, err)
 					continue
@@ -93,5 +98,6 @@ func Do(DOP int, f Factory) ([]TaskExec, error) {
 	for e := range taskExecs {
 		exec = append(exec, e)
 	}
-	return exec, nil
+	_ = exec
+	return nil
 }
