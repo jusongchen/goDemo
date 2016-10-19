@@ -1,0 +1,1 @@
+find . -name '*.gz' -delete

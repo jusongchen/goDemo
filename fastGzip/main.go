@@ -25,8 +25,8 @@ type gzipCtx struct {
 
 //Task implements exec method
 func (gz *gzipCtx) Exec() error {
-	log.Printf("processing:%s", gz.source)
-	return nil
+	// log.Printf("processing:%s", gz.source)
+	// return nil
 
 	reader, err := os.Open(gz.source)
 	if err != nil {
@@ -51,11 +51,12 @@ func (gz *gzipCtx) Exec() error {
 
 //Task implements exec method
 func (gz *gzipCtx) PreExec(exec workers.TaskExec) {
-	log.Printf("processing:%s\n", gz.source)
+	// log.Printf("Task begin\t\t worker #%d \t:%s\n", exec.WorkerID, gz.source)
+	log.Printf("Task begin\t\t Woker #%d \t %v \t\t%s\n", exec.WorkerID, exec.Elapsed, gz.source)
 }
 
 func (gz *gzipCtx) PostExec(exec workers.TaskExec) {
-	fmt.Printf("Woker #%d \t\t %v \t\t%s\n", exec.WorkerID, exec.Elapsed, gz.source)
+	log.Printf("Task end\t\t Woker #%d \t %v \t\t%s\n", exec.WorkerID, exec.Elapsed, gz.target)
 }
 
 type fileList []string
@@ -63,12 +64,10 @@ type fileList []string
 var fileIndex int
 
 func (l fileList) Make() workers.Task {
-	log.Printf("Make:fileIndex %d, %v\n", fileIndex, l)
 	if fileIndex == len(l) {
 		return nil
 	}
 	name := l[fileIndex]
-	log.Printf("Make:file:%s\n", name)
 	fileIndex++
 	return &gzipCtx{source: name, target: name + ".gz"}
 }
