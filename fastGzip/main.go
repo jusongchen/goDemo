@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"time"
 
 	"github.com/jusongchen/goDemo/workers"
 	"github.com/pkg/errors"
@@ -24,9 +25,9 @@ type gzipCtx struct {
 }
 
 //Task implements exec method
-func (gz *gzipCtx) Exec() error {
-	// log.Printf("processing:%s", gz.source)
-	// return nil
+func (gz *gzipCtx) Exec(w workers.WorkerID) error {
+	stop := startTimer(fmt.Sprintf("worker #%d %s", w, gz.source))
+	defer stop()
 
 	reader, err := os.Open(gz.source)
 	if err != nil {
@@ -49,16 +50,6 @@ func (gz *gzipCtx) Exec() error {
 	return err
 }
 
-//Task implements exec method
-func (gz *gzipCtx) PreExec(exec workers.TaskExec) {
-	// log.Printf("Task begin\t\t worker #%d \t:%s\n", exec.WorkerID, gz.source)
-	log.Printf("Task begin\t\t Woker #%d \t %v \t\t%s\n", exec.WorkerID, exec.Elapsed, gz.source)
-}
-
-func (gz *gzipCtx) PostExec(exec workers.TaskExec) {
-	log.Printf("Task end\t\t Woker #%d \t %v \t\t%s\n", exec.WorkerID, exec.Elapsed, gz.target)
-}
-
 type fileList []string
 
 var fileIndex int
@@ -72,41 +63,13 @@ func (l fileList) Make() workers.Task {
 	return &gzipCtx{source: name, target: name + ".gz"}
 }
 
-func main() {
-	flag.IntVar(&DOP, "DOP", runtime.NumCPU(), "Degree of Parallelism, must be >= 1")
-
-	flag.Usage = func() {
-		fmt.Printf("%s by Jusong Chen\n", os.Args[0])
-		fmt.Println("Usage:")
-		fmt.Printf("   %s [flags] path pattern \n", os.Args[0])
-		fmt.Println("Flags:")
-		flag.PrintDefaults()
-		os.Exit(-1)
+func startTimer(name string) func() {
+	t := time.Now()
+	log.Println(name, "started")
+	return func() {
+		d := time.Now().Sub(t)
+		log.Println(name, "took", d)
 	}
-
-	flag.Parse()
-
-	if flag.NArg() != 2 || DOP < 1 {
-		flag.Usage()
-	}
-	path, err := filepath.Abs(flag.Arg(0))
-	if err != nil {
-		log.Fatalf("Cannot get absolute path:%s", flag.Arg(0))
-	}
-	pattern := flag.Arg(1)
-
-	l, err := FindFiles(path, pattern)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// log.Printf("files Found:%v\n", l)
-	// c := workers.Context{}
-
-	err = workers.Do(DOP, fileList(l))
-	if err != nil {
-		log.Fatal(err)
-	}
-
 }
 
 //FindFiles search directory tree to get files matching regexp pattern
@@ -136,4 +99,46 @@ func FindFiles(root string, pattern string) ([]string, error) {
 	})
 	// fmt.Printf("Files:%v", m)
 	return m, err
+}
+
+func main() {
+	flag.IntVar(&DOP, "DOP", runtime.NumCPU(), "Degree of Parallelism, must be >= 1")
+
+	flag.Usage = func() {
+		fmt.Printf("%s by Jusong Chen\n", os.Args[0])
+		fmt.Println("Usage:")
+		fmt.Printf("   %s [flags] path pattern \n", os.Args[0])
+		fmt.Println("Flags:")
+		flag.PrintDefaults()
+		os.Exit(-1)
+	}
+
+	flag.Parse()
+
+	if flag.NArg() != 2 || DOP < 1 {
+		flag.Usage()
+	}
+	path, err := filepath.Abs(flag.Arg(0))
+	if err != nil {
+		log.Fatalf("Cannot get absolute path:%s", flag.Arg(0))
+	}
+	pattern := flag.Arg(1)
+
+	files, err := FindFiles(path, pattern)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	c := workers.Context{
+		DOP:     DOP,
+		Factory: fileList(files),
+	}
+
+	stop := startTimer(fmt.Sprintf("gzip %d files", len(files)))
+	defer stop()
+	err = c.Do()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
