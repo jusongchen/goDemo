@@ -1,7 +1,6 @@
 package workers
 
 import (
-	"fmt"
 	"sync"
 	"time"
 	// "golang.org/x/net/context"
@@ -49,7 +48,6 @@ func Do(DOP int, f Factory) error {
 	//generate tasks
 	go func() {
 		for {
-			fmt.Printf("\nmaking tasks ***********\n")
 			task := f.Make()
 			if task == nil { //no more tasks
 				close(tasks)
