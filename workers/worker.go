@@ -1,9 +1,8 @@
 package workers
 
 import (
-	"sync"
-
 	"golang.org/x/net/context"
+	"golang.org/x/sync/errgroup"
 )
 
 type (
@@ -43,23 +42,33 @@ func Do(c *Context) error {
 		}
 	}()
 
-	var wg sync.WaitGroup
-	wg.Add(numWorkers)
+	if c.Context == nil {
+		c.Context = context.Background()
+	}
+	g, ctx := errgroup.WithContext(c.Context)
 
 	//launch workers
 	for i := 0; i < numWorkers; i++ {
 		w := WorkerID(i)
 
-		go func(w WorkerID) {
-			defer wg.Done()
-			for tsk := range tasks {
-				tsk.Exec(w)
+		//stand a go rountine
+		g.Go(func() error {
+			for {
+				select {
+				case tsk := <-tasks:
+					if tsk == nil {
+						return nil
+					}
+					err := tsk.Exec(w)
+					if err != nil {
+						return err
+					}
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
-		}(w)
+		})
 	}
-
-	//wait for all workers done
-	wg.Wait()
-
-	return nil
+	//wait for all workers done or a worker returns an error
+	return g.Wait()
 }
