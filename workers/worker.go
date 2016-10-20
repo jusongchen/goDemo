@@ -7,36 +7,34 @@ import (
 )
 
 type (
-	//WorkerID exported
+	//WorkerID is exported and identifies a goroutine
 	WorkerID int
 
-	//Task interface
+	//Task is the interface which executable tasks must implement
 	Task interface {
 		Exec(WorkerID) error
 	}
 
-	//Factory make tasks to be executed by workers in parallel
-	Factory interface {
-		Make() Task
-	}
+	//FactoryFunc is the function to be invoked to make instances of Task
+	FactoryFunc func() Task
 
-	// Context controls tasks execution
+	// Context specifies controls of concurrent task executions
 	Context struct {
 		context.Context
 		DOP int
-		Factory
+		FactoryFunc
 	}
 )
 
 //Do execute tasks in parallel
-func (c *Context) Do() error {
+func Do(c *Context) error {
 	numWorkers := c.DOP
 
 	tasks := make(chan Task)
 	//generate tasks
 	go func() {
 		for {
-			task := c.Factory.Make()
+			task := c.FactoryFunc()
 			if task == nil { //no more tasks
 				close(tasks)
 				return

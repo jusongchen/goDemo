@@ -24,7 +24,17 @@ type gzipCtx struct {
 	target string
 }
 
-//Task implements exec method
+//startTimer return a function which calculates elapsed time when called.
+func startTimer(name string) func() {
+	t := time.Now()
+	log.Println(name, "started")
+	return func() {
+		d := time.Now().Sub(t)
+		log.Println(name, "took", d)
+	}
+}
+
+//implements workers.Task
 func (gz *gzipCtx) Exec(w workers.WorkerID) error {
 	stop := startTimer(fmt.Sprintf("worker #%d %s", w, gz.source))
 	defer stop()
@@ -50,25 +60,17 @@ func (gz *gzipCtx) Exec(w workers.WorkerID) error {
 	return err
 }
 
-type fileList []string
+//taskFunc return a function which makes tasks
+func taskFunc(srcFiles []string) workers.FactoryFunc {
 
-var fileIndex int
-
-func (l fileList) Make() workers.Task {
-	if fileIndex == len(l) {
-		return nil
-	}
-	name := l[fileIndex]
-	fileIndex++
-	return &gzipCtx{source: name, target: name + ".gz"}
-}
-
-func startTimer(name string) func() {
-	t := time.Now()
-	log.Println(name, "started")
-	return func() {
-		d := time.Now().Sub(t)
-		log.Println(name, "took", d)
+	var index int
+	return func() workers.Task {
+		if index == len(srcFiles) { //
+			return nil
+		}
+		name := srcFiles[index]
+		index++
+		return &gzipCtx{source: name, target: name + ".gz"}
 	}
 }
 
@@ -129,14 +131,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	c := workers.Context{
-		DOP:     DOP,
-		Factory: fileList(files),
+	c := &workers.Context{
+		DOP:         DOP,
+		FactoryFunc: taskFunc(files),
 	}
 
 	stop := startTimer(fmt.Sprintf("gzip %d files", len(files)))
 	defer stop()
-	err = c.Do()
+	err = workers.Do(c)
 	if err != nil {
 		log.Fatal(err)
 	}
