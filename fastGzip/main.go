@@ -16,9 +16,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-//DOP degree of parallelism
-var DOP int
-
 type gzipCtx struct {
 	source string
 	target string
@@ -102,6 +99,9 @@ func FindFiles(root string, pattern string) ([]string, error) {
 	// fmt.Printf("Files:%v", m)
 	return m, err
 }
+
+//DOP degree of parallelism
+var DOP int
 
 func main() {
 	flag.IntVar(&DOP, "DOP", runtime.NumCPU(), "Degree of Parallelism, must be >= 1")
