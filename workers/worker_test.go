@@ -2,6 +2,7 @@ package workers
 
 import (
 	"errors"
+	"log"
 	"math"
 	"testing"
 	"time"
@@ -23,6 +24,10 @@ var WorkerTests = []struct {
 	{3, 2, 2, nil},
 	{3, 3, 1, nil},
 	{3, 4, 1, nil},
+	{4, 2, 2, nil},
+	{4, 3, 2, nil},
+	{4, 4, 1, nil},
+	{4, 5, 1, nil},
 }
 
 type timer struct {
@@ -83,7 +88,7 @@ func calcuateElapsedTime(timers []*timer) (time.Duration, int) {
 //TestDo test Do func which execute timers in parallel
 func TestDo(t *testing.T) {
 	for _, tt := range WorkerTests {
-
+		log.Printf("test case %+v", tt)
 		timers := createTimers(tt.numTask)
 
 		ctx := Context{
