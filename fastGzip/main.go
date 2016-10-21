@@ -74,9 +74,18 @@ func taskFunc(srcFiles []string) workers.FactoryFunc {
 //FindFiles search directory tree to get files matching regexp pattern
 func FindFiles(root string, pattern string) ([]string, error) {
 
+	//check if root exists
+	_, err := os.Stat(root)
+	if os.IsNotExist(err) {
+		return nil, errors.Wrap(err, "Bad path")
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "FindFiles")
+	}
+
 	m := []string{}
 
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if !info.Mode().IsRegular() {
 			return nil
 		}
