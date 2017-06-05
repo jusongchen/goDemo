@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+//test cases
 var WorkerTests = []struct {
 	// c           *Context
 	numTask     int
@@ -36,6 +37,7 @@ type timer struct {
 	end   time.Time
 }
 
+//timer implements Task
 func (tm *timer) Exec(id WorkerID) error {
 	tm.start = time.Now()
 	time.Sleep(time.Second)
@@ -44,6 +46,7 @@ func (tm *timer) Exec(id WorkerID) error {
 	return nil
 }
 
+//factoryFuncNoErr returns a FactoryFunc which makes Task when called
 func factoryFuncNoErr(timers []*timer) FactoryFunc {
 	var index int
 	return func() Task {
@@ -56,9 +59,10 @@ func factoryFuncNoErr(timers []*timer) FactoryFunc {
 	}
 }
 
-func createTimers(numTimer int) []*timer {
+//createTimers returns N timers
+func createTimers(N int) []*timer {
 	timers := []*timer{}
-	for i := 0; i < numTimer; i++ {
+	for i := 0; i < N; i++ {
 		timers = append(timers, &timer{id: i})
 	}
 	return timers
@@ -66,6 +70,7 @@ func createTimers(numTimer int) []*timer {
 
 var errZeroTime = errors.New("start or end time not set")
 
+//calcuateElapsedTime returns elapsed time and number of tasks not executed
 func calcuateElapsedTime(timers []*timer) (time.Duration, int) {
 	minStart := time.Now()
 	maxEnd := time.Now().Add(-time.Hour)
